@@ -13,13 +13,14 @@ module.exports = function(deployer, network, accounts) {
     let timestamp = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
     let allowance = web3.toWei(5, 'finney');
     let startingBalance = web3.toWei(1000, 'ether');
+    let ownerStake = 200; // owner will own 200bps or 2% of total token supply
     let nOfficials = 2;
     let startElection = timestamp + 1;
     let timeElection  = 3600*24;
     let fund = '0xcf5a77160A70060c8a0F355B61D319538aC20830'; // account #9 in ganache
 
     // await deployer.deploy(GrowthExperimentCoin, allowance, nOfficials, startElection, timeElection, fund);
-    await deployer.deploy(GrowthExperimentCoin, allowance, startingBalance, nOfficials, fund);
+    await deployer.deploy(GrowthExperimentCoin, allowance, startingBalance, ownerStake, nOfficials, fund);
     let gcoin = await GrowthExperimentCoin.deployed();
     console.log("Migration timestamp: " + timestamp + " of type " + typeof timestamp);
     console.log("gcoin.address: " + gcoin.address +

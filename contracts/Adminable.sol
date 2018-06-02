@@ -1,4 +1,4 @@
-pragma solidity ^0.4.18;
+pragma solidity ^0.4.23;
 
 import 'zeppelin-solidity/contracts/ownership/Ownable.sol';
 
@@ -14,7 +14,7 @@ contract Adminable is Ownable {
   event AdminTransferred(address indexed previousAdmin, address indexed newAdmin);
   event IdentityServiceTransferred(address indexed previousService, address indexed newService);
 
-  function Adminable() public {
+  constructor() public {
     admin = owner;
     identityService = owner;
   }
@@ -49,7 +49,7 @@ contract Adminable is Ownable {
    */
   function transferAdmin(address newAdmin) public onlyOwner {
     require(newAdmin != address(0));
-    AdminTransferred(admin, newAdmin);
+    emit AdminTransferred(admin, newAdmin);
     admin = newAdmin;
   }
 
@@ -59,7 +59,7 @@ contract Adminable is Ownable {
    */
   function transferIdentityService(address newService) public onlyOwnerOrAdmin {
     require(newService != address(0));
-    IdentityServiceTransferred(identityService, newService);
+    emit IdentityServiceTransferred(identityService, newService);
     identityService = newService;
   }
 }

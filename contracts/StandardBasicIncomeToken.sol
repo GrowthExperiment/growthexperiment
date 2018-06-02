@@ -16,8 +16,8 @@ contract StandardBasicIncomeToken is ERC20, BasicIncomeToken {
   mapping (address => mapping (address => uint256)) internal allowed;
 
 
-  function StandardBasicIncomeToken(uint256 allowance, uint256 startingBalance)
-  BasicIncomeToken(allowance, startingBalance)
+  function StandardBasicIncomeToken(uint256 allowance, uint256 startingBalance, uint256 ownerStake)
+  BasicIncomeToken(allowance, startingBalance, ownerStake)
   public {
   }
 

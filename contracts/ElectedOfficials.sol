@@ -43,11 +43,11 @@ contract ElectedOfficials is StandardBasicIncomeToken {
     _;
   }
 
-  constructor(uint _allowance, uint _startingBalance, uint _nOfficials, address _communityFund)
-  StandardBasicIncomeToken(_allowance, _startingBalance)
+  constructor(uint256 _allowance, uint256 _startingBalance, uint256 _ownerStake,
+              uint256 _nOfficials, address _communityFund)
+  StandardBasicIncomeToken(_allowance, _startingBalance, _ownerStake)
   public {
     nOfficials = _nOfficials;
-    // first officials before election?
     _inflationRate = 0;
     communityFund = _communityFund;
     createdAt = now;

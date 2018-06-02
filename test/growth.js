@@ -67,7 +67,7 @@ contract('GrowthExperimentCoin', async(accounts) => {
 
   it("should have enough balance to transfer something to account 1", async() => {
     let inst = await GrowthExperimentCoin.deployed();
-    let tx = await inst.transfer(accounts[1], 1);
+    let tx = await inst.transfer(accounts[1], 1000);
     console.log("Block timestamp " + web3.eth.getBlock(web3.eth.blockNumber).timestamp);
   });
 
@@ -95,7 +95,9 @@ contract('GrowthExperimentCoin', async(accounts) => {
   it("should have enough balance on account 1 to return something to account 0", async() => {
     let inst = await GrowthExperimentCoin.deployed();
     let balance = await inst.balanceOf.call(accounts[1]);
-    let tx = await inst.transfer(accounts[0], 1, { from: accounts[1] });
+    let tx = await inst.transfer(accounts[0], 1000, { from: accounts[1] });
+    let total = await inst.totalSupply.call();
+    console.log("Total supply now at " + total);
   });
 
   it("should allow owner to change admin", async() => {
@@ -137,6 +139,8 @@ contract('GrowthExperimentCoin', async(accounts) => {
     await expectThrow(inst.recover(accounts[5], accounts[1], { from: accounts[4] }));
   });
 
+
+  /* Tests on election */
   it("should not allow anybody to open first election, other than owner or admin", async() => {
     let inst = await GrowthExperimentCoin.deployed();
     let timestamp = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
@@ -240,4 +244,24 @@ contract('GrowthExperimentCoin', async(accounts) => {
   });
 
 
+  /* Tests on owner and community funds */
+  it("should accrue 2% of all coins to owner's account", async() => {
+    let coin = await GrowthExperimentCoin.deployed();
+    let totalCoins = await coin.totalSupply.call();
+    let ownerCoins = await coin.balanceOf.call(accounts[0]);
+    let ownerStake = await coin.ownerStake.call();
+    console.log("Block timestamp " + web3.eth.getBlock(web3.eth.blockNumber).timestamp);
+    console.log("Total coins: " + totalCoins.toString(10) + 
+      "\tOwner coins: " + ownerCoins.toString(10) +
+      " (" + ownerStake + "bps)");
+    let acc = web3.toBigNumber(0);
+    for(let i=0; i<10; i++) {
+      let balance = await coin.balanceOf.call(accounts[i]);
+      console.log("Balance of account #" + i + ": " + balance);
+      acc = acc.plus(balance);
+    }
+    console.log("Block timestamp " + web3.eth.getBlock(web3.eth.blockNumber).timestamp);
+    console.log("Accumulated sum: " + acc.toString(10));
+    assert.equal(totalCoins.toNumber(), acc.toNumber());
+  });
 });

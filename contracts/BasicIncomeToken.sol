@@ -1,4 +1,4 @@
-pragma solidity ^0.4.18;
+pragma solidity ^0.4.23;
 
 import 'zeppelin-solidity/contracts/token/ERC20/ERC20Basic.sol';
 import 'zeppelin-solidity/contracts/math/SafeMath.sol';
@@ -17,7 +17,10 @@ contract BasicIncomeToken is ERC20Basic, Adminable, VerifiedToken {
   mapping(address => int256) balances;
 
   // Mapping containing timestamp at which address identity was verified
-  mapping(address => uint) public activations;
+  mapping(address => uint256) public activations;
+
+  // Mapping containing frozen accounts
+  mapping(address => bool) frozen;
 
   // Tokens per second
   uint256 public allowancePerSecond;
@@ -26,6 +29,9 @@ contract BasicIncomeToken is ERC20Basic, Adminable, VerifiedToken {
   uint256 public startingBalance;
 
   uint256 totalSupply_;
+
+  // Balance of owner's wallet, in basis points on total supply
+  uint256 public ownerStake;
 
   // Timestamp of last account verification
   uint256 lastVerification;
@@ -36,9 +42,12 @@ contract BasicIncomeToken is ERC20Basic, Adminable, VerifiedToken {
   event AccountVerified(address indexed account, uint timestamp);
   event AccountRecovered(address indexed fromAccount, address indexed toAccount);
 
-  function BasicIncomeToken(uint256 _allowancePerSecond, uint256 _startingBalance) public {
+  constructor(uint256 _allowancePerSecond, uint256 _startingBalance, uint256 _ownerStake)
+  public {
+    require(ownerStake<10000, "Owner's stake must be lower than 100%");
     allowancePerSecond = _allowancePerSecond;
     startingBalance = _startingBalance;
+    ownerStake = _ownerStake;
   }
 
   /**
@@ -46,7 +55,10 @@ contract BasicIncomeToken is ERC20Basic, Adminable, VerifiedToken {
    */
   function totalSupply() public view returns (uint256) {
     uint256 sinceLastVerification = now - lastVerification;
-    return totalSupply_ + (verifiedAccounts * allowancePerSecond * sinceLastVerification);
+    return  (totalSupply_ +
+            (verifiedAccounts * allowancePerSecond * sinceLastVerification) +
+            (verifiedAccounts * startingBalance) ) * 
+            (uint256(10000) + ownerStake) / uint256(10000);
   }
 
   /**
@@ -66,26 +78,32 @@ contract BasicIncomeToken is ERC20Basic, Adminable, VerifiedToken {
     require( new_balance >= balances[_to] );
     balances[_to] = new_balance;
 
-    Transfer(msg.sender, _to, _value);
+    emit Transfer(msg.sender, _to, _value);
     return true;
   }
 
   /**
    * @dev Gets the balance of the specified address.
-   * @param _owner The address to query the the balance of.
+   * @param _account The address to query the the balance of.
    * @return An uint256 representing the amount owned by the passed address.
    */
-  function balanceOf(address _owner) public view returns (uint256) {
-    // Only for addresses whose identity was verified 
-    if(activations[_owner]>0) {
-      int256 allowanceMatured = int256((now - activations[_owner]) * allowancePerSecond);
+  function balanceOf(address _account) public view returns (uint256) {
+    // Allowances only accruing for addresses whose identity was verified and not frozen
+    if(activations[_account]>0 && !frozen[_account]) {
+      int256 allowanceMatured = int256((now - activations[_account]) * allowancePerSecond);
       require(allowanceMatured >= 0);
-      int256 netBalance = allowanceMatured + balances[_owner] + int256(startingBalance);
+      int256 netBalance = allowanceMatured + balances[_account] + int256(startingBalance);
       require(netBalance >= 0);
+
+      // Add owner's stake to owner's account
+      if(_account==owner) {
+        netBalance += int256(totalSupply() * ownerStake / (10000 + ownerStake));
+        require(netBalance >= 0);
+      }
       return uint256(netBalance);
     }
-    if(balances[_owner] > 0) {
-      return uint256(balances[_owner]);
+    if(balances[_account] > 0) {
+      return uint256(balances[_account]);
     }
     return 0;
   }
@@ -105,12 +123,17 @@ contract BasicIncomeToken is ERC20Basic, Adminable, VerifiedToken {
       lastVerification = now;
       verifiedAccounts += 1;
       activations[_account] = now;
-      AccountVerified(_account, now);
+      emit AccountVerified(_account, now);
     }
     return activations[_account];
   }
 
   function freeze(address _account) public onlyIdentityService {
+    frozen[_account] = true;
+  }
+
+  function unfreeze(address _account) public onlyIdentityService {
+    frozen[_account] = false;
   }
 
   function isVerified(address _account) public view returns(bool) {
@@ -124,6 +147,6 @@ contract BasicIncomeToken is ERC20Basic, Adminable, VerifiedToken {
     activations[_fromAccount] = 0;
     balances[_toAccount] = balances[_fromAccount];
     balances[_fromAccount] = 0;
-    AccountRecovered(_fromAccount, _toAccount);
+    emit AccountRecovered(_fromAccount, _toAccount);
   }
 }
