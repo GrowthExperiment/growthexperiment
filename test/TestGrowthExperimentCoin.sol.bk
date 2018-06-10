@@ -1,0 +1,10 @@
+import "truffle/Assert.sol";
+import "truffle/DeployedAddresses.sol";
+import "../contracts/GrowthExperimentCoin.sol";
+
+contract TestCoin {
+  function testElection() {
+    // GrowthExperimentCoin coin = GrowthExperimentCoin(DeployedAddresses.GrowthExperimentCoin());
+    // Assert.equal(coin.symbol, "GEC");
+  }
+}

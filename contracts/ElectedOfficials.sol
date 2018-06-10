@@ -39,7 +39,7 @@ contract ElectedOfficials is StandardBasicIncomeToken {
         break;
       }
     }
-    require(found);
+    require(found, "Only an elected official can call this method");
     _;
   }
 
@@ -77,8 +77,10 @@ contract ElectedOfficials is StandardBasicIncomeToken {
   function closeElection() public {
     election.closeElection();
     address[] memory winners = election.getWinnersAddresses();
+    officials.length = winners.length;
     for(uint i=0; i<winners.length; i++) {
-      officials.push(winners[i]);
+      officials[i] = winners[i];
+      //officials.push(winners[i]);
     }
   }
 
@@ -86,8 +88,12 @@ contract ElectedOfficials is StandardBasicIncomeToken {
     return _inflationRate;
   }
 
+  /**
+    * @notice Sets inflation rate funding community funds
+    * @param rate inflation rate in basis points
+    */
   function setInflationRate(uint256 rate) public onlyOfficials {
-    require(rate <= MAX_INFLATION_RATE);
+    require(rate <= MAX_INFLATION_RATE, "Inflation rate must be lower than 5%");
     _inflationRate = rate;
     emit InflationRateChanged(msg.sender, _inflationRate);
   }
@@ -97,12 +103,12 @@ contract ElectedOfficials is StandardBasicIncomeToken {
       _lastInflationUpdate = createdAt;
     }
     uint256 inflationFlow = totalSupply() * 
-      (now - _lastInflationUpdate) * _inflationRate / 10000 / 3600 / 24 / 365;
+      (now - _lastInflationUpdate) * _inflationRate / uint256(10000 * 3600 * 24 * 365);
     _inflationStock += inflationFlow;
     _lastInflationUpdate = now;
     int256 availableFunds = balances[communityFund] + int256(_inflationStock);
-    require(availableFunds>balances[communityFund]);
-    require(availableFunds>0);
+    require(availableFunds >= balances[communityFund]);
+    require(availableFunds >= 0);
     return uint256(availableFunds);
   }
 

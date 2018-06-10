@@ -125,13 +125,19 @@ contract('GrowthExperimentCoin', async(accounts) => {
   });
 
   it("should allow identity service to recover and transfer an account", async() => {
+    // Waiting 1 sec before testing account transfers
+    await delay(1000);
+
     let inst = await GrowthExperimentCoin.deployed();
-    let oldBalance = await inst.balanceOf(accounts[1]);
-    console.log('Account 1 balance: ' + oldBalance.toString());
+    let oldBalance = await inst.balanceOf.call(accounts[1]);
+    let timestamp1 = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
+    console.log('Account 1 balance: ' + oldBalance.toString() + ' at time ' + timestamp1);
     let tx = await inst.recover(accounts[1], accounts[5], { from: accounts[2] });
-    let newBalance = await inst.balanceOf(accounts[5]);
-    console.log('Account 5 balance: ' + newBalance.toString());
-    assert.equal(oldBalance.toNumber(), newBalance.toNumber(), "Balances of old and new account do not match");
+    let timestamp2 = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
+    let allowance = await inst.allowancePerSecond.call();
+    let newBalance = await inst.balanceOf.call(accounts[5]);
+    console.log('Account 5 balance: ' + newBalance.toString() + ' at time ' + timestamp2);
+    assert.equal(oldBalance.toNumber() + (timestamp2-timestamp1) * allowance, newBalance.toNumber(), "Balances of old and new account do not match");
   });
 
   it("should not allow non-identity service to transfer or recover accounts", async() => {
@@ -142,6 +148,9 @@ contract('GrowthExperimentCoin', async(accounts) => {
 
   /* Tests on election */
   it("should not allow anybody to open first election, other than owner or admin", async() => {
+    // Waiting 1 sec before testing elections
+    await delay(1000);
+
     let inst = await GrowthExperimentCoin.deployed();
     let timestamp = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
     let startElection = timestamp + 1;
@@ -171,6 +180,7 @@ contract('GrowthExperimentCoin', async(accounts) => {
     let election = await coin.election.call();
     let inst = Election.at(election);
 
+    console.log("First election contract at address " + election);
     console.log("Block timestamp " + web3.eth.getBlock(web3.eth.blockNumber).timestamp);
     let end = await inst.end.call()
     console.log("Election ends at " + end);
@@ -230,10 +240,12 @@ contract('GrowthExperimentCoin', async(accounts) => {
     // move forward the clock by one day because election needs at least one day to run
     moveClockForward(3600*24+1);
 
-    await inst.closeElection();
-    let winner = await inst.winners.call(0);
-    console.log("Winner: " + winner);
-    assert.equal(winner[0], accounts[2]);
+    await coin.closeElection();
+    //let winner = await inst.winners.call(0);
+    let winner = await coin.officials.call(0);
+    //console.log("Winner: " + winner);
+    console.log("Elected officials: " + winner);
+    assert.equal(winner, accounts[2]);
   });
 
   it("should not allow to close election a second time", async() => {
@@ -243,16 +255,51 @@ contract('GrowthExperimentCoin', async(accounts) => {
     await expectThrow(inst.closeElection());
   });
 
+  it("should allow anyone to openElection after first one closed", async() => {
+    let inst = await GrowthExperimentCoin.deployed();
+    let timestamp = web3.eth.getBlock(web3.eth.blockNumber).timestamp;
+    let startElection = timestamp + 1;
+    let timeElection  = 3600*24;
+    await inst.openElection(startElection, timeElection, { from: accounts[4] });
+  });
+
+  it("should allow another election to run", async() => {
+    let coin = await GrowthExperimentCoin.deployed();
+    let election = await coin.election.call();
+    console.log("Second election contract at address " + election);
+    let inst = Election.at(election);
+    await inst.run("Account Two", { from: accounts[2] });
+    await inst.run("Account Five", { from: accounts[5] });
+    await delay(1000);
+    await inst.vote(accounts[2], { from: accounts[2] });
+    await inst.vote(accounts[5], { from: accounts[5] });
+    await inst.vote(accounts[5], { from: accounts[0] });
+    moveClockForward(3600*24+1);
+    let c0 = await inst.candidateAddresses.call(0);
+    let c1 = await inst.candidateAddresses.call(1);
+    let candidate0 = await inst.candidates.call(c0);
+    let candidate1 = await inst.candidates.call(c1);
+    console.log("Candidate 0: " + candidate0);
+    console.log("Candidate 1: " + candidate1);
+
+    await coin.closeElection();
+    await delay(1000);
+    let winner = await coin.officials.call(0);
+    console.log("Elected officials: " + winner);
+    assert.equal(winner, accounts[5]);
+  });
 
   /* Tests on owner and community funds */
   it("should accrue 2% of all coins to owner's account", async() => {
+    // Waiting 1 sec before testing owner and community funds
+    await delay(1000);
     let coin = await GrowthExperimentCoin.deployed();
     let totalCoins = await coin.totalSupply.call();
     let ownerCoins = await coin.balanceOf.call(accounts[0]);
     let ownerStake = await coin.ownerStake.call();
     console.log("Block timestamp " + web3.eth.getBlock(web3.eth.blockNumber).timestamp);
-    console.log("Total coins: " + totalCoins.toString(10) + 
-      "\tOwner coins: " + ownerCoins.toString(10) +
+    console.log("Total coins: " + web3.fromWei(totalCoins, 'ether') + 
+      "\tOwner coins: " + web3.fromWei(ownerCoins, 'ether').toString(10) +
       " (" + ownerStake + "bps)");
     let acc = web3.toBigNumber(0);
     for(let i=0; i<10; i++) {
@@ -261,7 +308,42 @@ contract('GrowthExperimentCoin', async(accounts) => {
       acc = acc.plus(balance);
     }
     console.log("Block timestamp " + web3.eth.getBlock(web3.eth.blockNumber).timestamp);
-    console.log("Accumulated sum: " + acc.toString(10));
+    console.log("Accumulated sum: " + web3.fromWei(acc, 'ether').toString(10));
     assert.equal(totalCoins.toNumber(), acc.toNumber());
+  });
+
+  it("Default inflation rate is at 0, so community funds should be 0", async() => {
+    let coin = await GrowthExperimentCoin.deployed();
+    let communityFunds = await coin.balanceOfCommunityFunds.call();
+    console.log("Community funds: " + communityFunds.toString(10));
+    assert.equal(communityFunds.toNumber(), 0);
+  });
+
+  it("Get officials to set inflation rate and check community funds", async() => {
+    let coin = await GrowthExperimentCoin.deployed();
+    await coin.setInflationRate(300, {from: accounts[2]});
+    moveClockForward(3600*24*365);
+    let communityFunds = await coin.balanceOfCommunityFunds.call();
+    let totalCoins = await coin.totalSupply.call();
+    console.log("Community funds: " + web3.fromWei(communityFunds, 'ether'));
+    console.log("Total coins: " + web3.fromWei(totalCoins, 'ether'));
+    assert(communityFunds.toNumber() > 0);
+  });
+
+  it("should allow officials to spend community funds", async() => {
+    let coin = await GrowthExperimentCoin.deployed();
+    await coin.transferCommunityFunds(accounts[9], web3.toWei(1, 'ether'), { from: accounts[2] });
+    let communityFunds = await coin.balanceOfCommunityFunds.call();
+    console.log("Community funds: " + web3.fromWei(communityFunds, 'ether'));
+
+  });
+
+  it("should not allow non-officials to spend community funds", async() => {
+    let coin = await GrowthExperimentCoin.deployed();
+    await expectThrow(
+      coin.transferCommunityFunds(accounts[9], web3.toWei(1, 'ether'),
+        { from: accounts[7] }));
+    let communityFunds = await coin.balanceOfCommunityFunds.call();
+    console.log("Community funds: " + web3.fromWei(communityFunds, 'ether'));
   });
 });

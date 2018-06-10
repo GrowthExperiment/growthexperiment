@@ -15,7 +15,7 @@ contract Election {
   VerifiedToken public token;
   Candidate[] public winners;
   address[] public candidateAddresses;
-  mapping(address => Candidate) candidates;
+  mapping(address => Candidate) public candidates;
   mapping(address => bool) voters;
 
   uint public nWinners;
@@ -60,7 +60,7 @@ contract Election {
 
   function contains(uint[] a, uint target) internal pure returns (bool) {
     for (uint i = 0; i < a.length; i++) {
-      if(i == target) return true;
+      if(a[i] == target) return true;
     }
     return false;
   }
